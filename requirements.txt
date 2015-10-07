@@ -1,0 +1,2 @@
+aiohttp==0.17.4
+tasklocals==0.2
