@@ -1,3 +1,5 @@
+sudo: false
+
 language: 
     python
 
@@ -6,9 +8,10 @@ python:
 
 install:
     - pip install -r requirements.txt
-    - pip install .
+    - pip install pytest-cov coverage coveralls
+    - python setup.py develop
 
-script: 
+script:
     py.test --cov-report term-missing --cov hypr
 
 after_success:
