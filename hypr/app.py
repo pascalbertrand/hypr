@@ -6,33 +6,37 @@ hypr.app
 :license: BSD, see LICENSE for more details.
 """
 
+
 import asyncio
 
-from aiohttp.web import Application
-from .dispatcher import Dispatcher
-from .globals import LocalStorage
-from .testing import TestClient
+from functools import partial
+
+from aiohttp.web import Application, RequestHandlerFactory
+from hypr.request import RequestHandler, Request
+from hypr.dispatcher import Dispatcher
+from hypr.globals import LocalStorage
+from hypr.testing import TestClient
+
+
+hypr_factory = partial(RequestHandlerFactory, handler=RequestHandler)
 
 
 class Hypr(Application):
     """
     """
 
+    request_class = Request
+
     def __init__(self, *, logger=None, loop=None, router=None,
                  handler_factory=None, middlewares=None):
 
-        if loop is None:
-            loop = asyncio.get_event_loop()
-
         kwargs = {'logger': logger,
-                  'loop': loop,
+                  'loop': loop or asyncio.get_event_loop(),
                   'router': router or Dispatcher(),
-                  'handler_factory': handler_factory,
+                  'handler_factory': handler_factory or hypr_factory,
                   'middlewares': middlewares}
 
         super().__init__(**{k: v for k, v in kwargs.items() if v is not None})
-
-        # create the local storage for upcoming tasks binded to the app
 
         LocalStorage.bind(self)
 

@@ -151,7 +151,6 @@ class MatchInfo(dict, AbstractMatchInfo):
         self._provider = provider
         self._rule = rule
 
-    # required for compatibility purpose
     @property
     def route(self):
         return self._rule
@@ -299,9 +298,6 @@ class Dispatcher(AbstractRouter):
 
         # initialize the local storage
         LocalStorage().set('request', request)
-
-        # initialize the mandatory filters
-        setattr(request, 'm_filters', {})
 
         path = request.path
         method = request.method
