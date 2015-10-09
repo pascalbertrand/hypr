@@ -47,6 +47,8 @@ class TestBasicRouting:
 
         with app.test_client() as client:
 
+            resp = client.get('/res2', allow_redirects=False)
+            assert resp.status == 307
             resp = client.get('/res2')
             assert resp.status == 200
             assert json.loads(resp.text) == {'Resource2': 'ok'}
@@ -138,7 +140,7 @@ class TestPropagationAndVerbs:
     prop_0.propagation_rules = {'next': prop_1, 'next2': prop_2}
     prop_1.propagation_rules = {'next': prop_0}
     prop_2.propagation_rules = {'next': prop_0}
-    
+
     providers = {
         prop_0: '/res0',
         prop_1: '/res1',
@@ -250,21 +252,21 @@ class TestPropagation:
 class TestRuleErrors:
 
     def test_duplicate_variable_name(self, app):
-        
+
         with pytest.raises(ValueError) as err:
             app.router.add_provider(Provider, '/<int:value>/<int:value>')
 
         assert 'variable name \'value\' used twice.' in str(err)
 
     def test_malformed_rule(self, app):
-        
+
         with pytest.raises(ValueError) as err:
             app.router.add_provider(Provider, '/<int:value')
 
         assert 'malformed url rule' in str(err)
 
     def test_leading_slash_required(self, app):
-        
+
         with pytest.raises(ValueError) as err:
             app.router.add_provider(Provider, 'foo/bar')
 

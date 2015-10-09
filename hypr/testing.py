@@ -47,7 +47,9 @@ class TestClient:
         self.srv = yield from self.app.loop.create_server(
             self.handler,'127.0.0.1', self.port)
 
-    def request(self, method, path):
+    def request(self, method, path, **kwargs):
+
+        kwargs['loop'] = self.app.loop
 
         @asyncio.coroutine
         def do_request():
@@ -56,25 +58,31 @@ class TestClient:
                 yield from self.create_server()
 
             url = 'http://127.0.0.1:{}'.format(self.port) + path
-            rv = yield from request(method, url, loop=self.app.loop)
+            rv = yield from request(method, url, **kwargs)
             rv.text = yield from rv.text()
 
             return rv
 
         return self.app.loop.run_until_complete(do_request())
 
-    def get(self, url):
-        return self.request('GET', url)
+    def get(self, url, **kwargs):
+        return self.request('GET', url, **kwargs)
 
-    def post(self, url):
-        return self.request('POST', url)
+    def head(self, url, **kwargs):
+        return self.request('HEAD', url, **kwargs)
 
-    def delete(self, url):
-        return self.request('DELETE', url)
+    def options(self, url, **kwargs):
+        return self.request('OPTIONS', url, **kwargs)
 
-    def put(self, url):
-        return self.request('PUT', url)
+    def post(self, url, **kwargs):
+        return self.request('POST', url, **kwargs)
 
-    def head(self, url):
-        return self.request('HEAD', url)
+    def put(self, url, **kwargs):
+        return self.request('PUT', url, **kwargs)
+
+    def patch(self, url, **kwargs):
+        return self.request('PATCH', url, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.request('DELETE', url, **kwargs)
 
