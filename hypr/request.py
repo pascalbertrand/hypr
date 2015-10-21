@@ -24,6 +24,10 @@ class Request(BaseRequest):
         super().__init__(*args, **kwargs)
         self.m_filters = {}
 
+    @property
+    def args(self):
+        return self.GET
+
     @asyncio.coroutine
     def json(self, *, loader=json.loads):
 
