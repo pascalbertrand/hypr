@@ -16,7 +16,9 @@ expect more than a tool to test your code.
 import copy
 import inspect
 
-from hypr.exc import ModelConflictException
+from hypr.globals import current_app
+from hypr.exc import ModelConflictException, ModelFilterException, \
+    ModelSearchException
 from hypr.models.base import BaseModel
 from collections import defaultdict
 
@@ -34,6 +36,7 @@ class MemoryModel(BaseModel):
         self._version = 0
         self._modified = False
         self._delete = False
+        self._orig_uid = None
 
         pending = PENDING_OBJ[self.__class__.__name__]
 
@@ -51,23 +54,62 @@ class MemoryModel(BaseModel):
 
         super().__setattr__(name, value)
 
+    def _match(self, **kwargs):
+
+        filters = getattr(self, '__filters__', None) # a tuple or None
+
+        for k, v in kwargs.items():
+
+            if not ((filters is None or k in filters) and hasattr(self, k)):
+                raise ModelFilterException('Unknown filter `{}`'.format(k))
+
+            if not isinstance(v, tuple):
+                v = v,
+            if hasattr(self, k) and getattr(self, k) in (v or (None,)):
+                continue
+            return False
+        return True
+
     @classmethod
     def get(cls, _limit=0, _offset=0, _order=None, _search=None, **kwargs):
-        """
-        Retrieve multiple instances of the class.
-        """
+
+        # get the default and absolute limits of the application
+        default_limit = 100
+        absolute_limit = 100
+        if current_app is not None:
+            default_limit = current_app.config['COLLECTION_DEFAULT_MAX']
+            absolute_limit = current_app.config['COLLECTION_ABSOLUTE_MAX']
+
+        if _search:
+            raise ModelSearchException()
 
         store = COMMITTED_OBJ[cls.__name__]
-        pending = PENDING_OBJ[cls.__name__]
-
         resp = {k: copy.deepcopy(v) for k, v in store.items()
-                                             if v.match(**kwargs)}
-        pending.update(resp)
+                                             if v._match(**kwargs)}
 
-        if _limit > 0:
-            return list(resp.values())[_offset:_offset+_limit]
-        else:
-            return list(resp.values())
+        limit = min(_limit or default_limit, absolute_limit)
+        return list(resp.values())[_offset:_offset+limit]
+
+    def save(self, commit=True):
+
+        pending = PENDING_OBJ[self.__class__.__name__]
+        pending[self._uid()] = self
+
+        if commit:
+            self.commit()
+
+    def delete(self, commit=True):
+        """
+        Delete a specific instance.
+        """
+
+        pending = PENDING_OBJ[self.__class__.__name__]
+        pending[self._uid()] = self
+
+        self._delete = True
+
+        if commit:
+            self.commit()
 
     @classmethod
     def commit(cls):
@@ -115,20 +157,3 @@ class MemoryModel(BaseModel):
         COMMITTED_OBJ.pop(cls.__name__, None)
         PENDING_OBJ.pop(cls.__name__, None)
 
-    def delete(self):
-        """
-        Delete a specific instance.
-        """
-
-        self._delete = True
-
-    def match(self, **kwargs):
-        """
-        Verify if an instance match the filters passed as kwargs.
-        """
-
-        for k, v in kwargs.items():
-            if hasattr(self, k) and getattr(self, k) in (v or (None,)):
-                continue
-            return False
-        return True

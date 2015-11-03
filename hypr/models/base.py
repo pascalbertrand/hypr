@@ -9,6 +9,8 @@ hypr.models.base
 
 import inspect
 
+from hypr.globals import current_app
+
 
 class BaseModel:
 
@@ -69,7 +71,20 @@ class BaseModel:
         based on the :meth:`get` method.
         """
 
-        return len(cls.get(_search=_search, **kwargs))
+        absolute_limit = 100
+        if current_app is not None:
+            absolute_limit = current_app.config['COLLECTION_ABSOLUTE_MAX']
+
+        count = 0
+        while True:
+            rv = cls.get(_search=_search, _limit=absolute_limit, _offset=count,
+                **kwargs)
+            if rv:
+                count += len(rv)
+            else:
+                break
+
+        return count
 
     def save(self, commit=True):
         """
