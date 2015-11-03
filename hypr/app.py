@@ -12,6 +12,7 @@ import asyncio
 from functools import partial
 
 from aiohttp.web import Application, RequestHandlerFactory
+from hypr.config import Config
 from hypr.request import RequestHandler, Request
 from hypr.dispatcher import Dispatcher
 from hypr.globals import LocalStorage
@@ -25,7 +26,15 @@ class Hypr(Application):
     """
     """
 
+    config_class = Config
     request_class = Request
+
+    # Default configuration parameters
+    default_config = {
+        'MODELS_SQLALCHEMY_DEFAULT_SERVER':     'sqlite:///:memory:',
+        'COLLECTION_DEFAULT_MAX':               10,
+        'COLLECTION_ABSOLUTE_MAX':              100,
+    }
 
     def __init__(self, *, logger=None, loop=None, router=None,
                  handler_factory=None, middlewares=None):
@@ -39,6 +48,7 @@ class Hypr(Application):
         super().__init__(**{k: v for k, v in kwargs.items() if v is not None})
 
         LocalStorage.bind(self)
+        self.config = self.config_class(defaults=self.default_config)
 
     def propagate(self):
 

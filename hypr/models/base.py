@@ -9,6 +9,8 @@ hypr.models.base
 
 import inspect
 
+from hypr.globals import current_app
+
 
 class BaseModel:
 
@@ -69,13 +71,41 @@ class BaseModel:
         based on the :meth:`get` method.
         """
 
-        return len(cls.get(_search=_search, **kwargs))
+        absolute_limit = 100
+        if current_app is not None:
+            absolute_limit = current_app.config['COLLECTION_ABSOLUTE_MAX']
+
+        count = 0
+        while True:
+            rv = cls.get(_search=_search, _limit=absolute_limit, _offset=count,
+                **kwargs)
+            if rv:
+                count += len(rv)
+            else:
+                break
+
+        return count
+
+    def save(self, commit=True):
+        """
+        Mark the instance has to be saved.
+        """
+
+        raise NotImplementedError()
+
+    def delete(self):
+        """
+        Mark the instance has to be deleted.
+        """
+
+        raise NotImplementedError()
 
     @classmethod
     def commit(cls):
         """
-        Make persistent all the staged modifications.
+        Commit staged (marked) instances.
         """
+
         raise NotImplementedError()
 
     @classmethod
@@ -83,24 +113,26 @@ class BaseModel:
         """
         Cancel all the staged modifications.
 
-        This method is called by the provider whenever something fails. Its
-        implementation is not mandatory.
+        This method is not mandatory.
         """
+
         pass
 
-    def delete(self):
-        """
-        """
-        raise NotImplementedError()
-
     @classmethod
-    def __validate__(cls, json):
+    def __validate__(cls, data, context=None):
         """
+        Validate data in a given context.
+
+        The default method doesn't perform any validation and returns ``True``.
         """
+
         return True
 
-    def __serialize__(self):
+    def __serialize__(self, context=None):
         """
+        Serialize data in a given context.
+
+        The default method simply tries to serialize the object properties.
         """
 
         return {k: v for k, v in inspect.getmembers(self)

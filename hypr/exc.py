@@ -15,3 +15,10 @@ class BaseModelException(Exception):
 
 class ModelConflictException(BaseModelException):
     """A model instance is conflicting with another model instance."""
+
+
+class ModelFilterException(BaseModelException):
+    """The field is not filterable."""
+
+class ModelSearchException(BaseModelException):
+    """The model does not support search."""

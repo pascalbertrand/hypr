@@ -12,18 +12,42 @@ from functools import partial
 
 class LocalStorage:
 
-    _storage = None
+    _app = None
+    _task = None
 
     @classmethod
     def bind(cls, app):
-        cls._storage = tasklocals.local(loop=app.loop)
+        cls._app = app
+        cls._task = tasklocals.local(loop=app.loop)
+
+    def app(self):
+        return self._app
 
     def set(self, name, attr):
-        return setattr(self._storage, name, attr)
 
-    def get(self, attr):
-        return getattr(self._storage, attr)
+        if self._task is None:
+            raise RuntimeError('LocalStorage is not binded to an application')
 
+        setattr(self._task, name, attr)
+
+    def get(self, name, default=...):
+
+        if self._task is None:
+            raise RuntimeError('LocalStorage is not binded to an application')
+
+        rv = getattr(self._task, name, default)
+
+        if rv is Ellipsis:
+            raise KeyError(name)
+
+        return rv
+
+    def delete(self, name):
+
+        if self._task is None:
+            raise RuntimeError('LocalStorage is not binded to an application')
+
+        delattr(self._task, name)
 
 class Proxy:
 
@@ -40,3 +64,4 @@ class Proxy:
 
 
 request = Proxy(partial(LocalStorage().get, 'request'))
+current_app = Proxy(partial(LocalStorage().app))

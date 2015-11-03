@@ -9,5 +9,11 @@ hypr.models
 
 from hypr.models.memory import MemoryModel
 
+try:
+    from hypr.models.sqlalchemy import SqlAlchemyModel, register_engine
+except ImportError:
+    pass
 
-__all__ = ['MemoryModel',]
+# Automatically generate the list of availables models
+
+__all__ = [name for name in locals().keys() if not name.endswith('Model')]

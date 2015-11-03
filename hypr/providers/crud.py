@@ -9,10 +9,12 @@ A RESTful provider.
 """
 
 
+import asyncio
+
 from hypr.globals import request
 from hypr.provider import Provider
 from hypr.web_exceptions import abort
-from hypr.exc import ModelConflictException
+from hypr.exc import ModelConflictException, ModelSearchException
 
 
 ERR_MSG = {
@@ -54,6 +56,7 @@ class CRUDProvider(Provider):
 
         return uid
 
+    @asyncio.coroutine
     def get(self, **kwargs):
 
         model = self.__model__
@@ -63,17 +66,19 @@ class CRUDProvider(Provider):
 
         try:
             search, order, limit, offset, fltrs = mini_dsl(request.args)
+            count = model.count(_search=search, **fltrs)
+            rv = model.get(limit, offset, order, search, **fltrs)
         except ValueError:
             abort(400)
+        except ModelSearchException:
+            abort(400)
+        else:
+            return {
+                'count': count,
+                'result': rv,
+            }
 
-        count = model.count(_search=search, **fltrs)
-        rv = model.get(limit, offset, order, search, **fltrs)
-
-        return {
-            'count': count,
-            'result': rv,
-        }
-
+    @asyncio.coroutine
     def post(self):
 
         model = self.__model__
@@ -90,7 +95,13 @@ class CRUDProvider(Provider):
             # TODO: implement bulk POST
             raise NotImplementedError()
         else:
-            rv = model(**json)
+
+            try:
+                rv = model(**json)
+            except TypeError:
+                abort(400)
+            else:
+                rv.save(commit=False)
 
         # commit changes
 
@@ -102,6 +113,7 @@ class CRUDProvider(Provider):
         else:
             return rv, 201
 
+    @asyncio.coroutine
     def put(self, **kwargs):
 
         model = self.__model__
@@ -117,15 +129,20 @@ class CRUDProvider(Provider):
         if bulk and not kwargs:
             # TODO: implement bulk PUT
             raise NotImplementedError()
+
         elif kwargs:
 
             rv = model.one(*self._uid(**kwargs)) or abort(404)
+
             for k, v in json.items():
                 if hasattr(rv, k):
                     setattr(rv, k, v)
                 else:
                     model.rollback()
                     abort(400)
+
+            rv.save(commit=False)
+
         else:
             abort(400)
 
@@ -139,6 +156,7 @@ class CRUDProvider(Provider):
         else:
             return rv
 
+    @asyncio.coroutine
     def delete(self, **kwargs):
 
         model = self.__model__
@@ -149,7 +167,7 @@ class CRUDProvider(Provider):
             raise NotImplementedError()
         elif kwargs:
             rv = model.one(*self._uid(**kwargs)) or abort(404)
-            rv.delete()
+            rv.delete(commit=False)
         else:
             abort(400)
 
@@ -162,4 +180,3 @@ class CRUDProvider(Provider):
             abort(409)
         else:
             return '', 204
-
