@@ -17,6 +17,7 @@ import uuid
 from hypr.helpers import _rule_mangling, _rule_mpxing
 from hypr.globals import request
 
+from collections import defaultdict
 
 HTTP_METHODS = frozenset(['get', 'post', 'head', 'options', 'delete', 'put',
                           'trace', 'patch'])
@@ -34,17 +35,16 @@ def _endpoint_uuid(path):
     return str(uuid.uuid5(uuid.NAMESPACE_URL, url))
 
 
-def checkpoint(scope=None):
+def checkpoint(scope=None, priority=10, methods=None):
     """
-    ``checkpoint`` is a method decorator to enable a :class:`Provider`'s
-    method as a security checkpoint.
+    ``checkpoint`` can decorate a method of a provider to make it a security
+    checkpoint.
 
-    Security checkpoints are used to verify if user-defined prerequisites are
-    met and, if not, block further request processing by raising an exception.
-
-    The decorated method is responsible of the error raising (:func:`abort` is
-    the prefered way to fulfill this task). To achieve this, the method is also
-    able to read the current rule variable segments.
+    Those checkpoints are used to verify prerequisites and eventually block
+    the request processing if expected conditions are not met. Each checkpoint
+    has its own priority value and can be limited to a scope or some HTTP
+    methods. The decorated method accepts any variable segments as an argument
+    of the method's signature.
 
     :param scope: limit the scope of a security checkpoint.
                   (default: ``Provider.ALWAYS``)
@@ -68,6 +68,16 @@ def checkpoint(scope=None):
         :class:`tuple`            any combination of the previous values
         ========================= =============================================
 
+    :param priority: An integer to set the priority of the checkpoint compared
+                     to the others checkpoints. Lower value means higher
+                     activity. (default: ``10``)
+
+    :param methods: Limit the security checkpoint to a tuple of HTTP methods.
+                    If none is specified, the checkpoint will be executed for
+                    any HTTP method. The attribute also accept a string if only
+                    one method need to be specified.
+                    (default: ``None``)
+
     Usages::
 
         class MyProvider(Provider):
@@ -77,7 +87,7 @@ def checkpoint(scope=None):
                 'rule1': OtherProvider0,
             }
 
-            @checkpoint     # equivalent to @checkpoint(scope=Provider.ALWAYS)
+            @checkpoint
             def check_example(self, request):
                 ...
 
@@ -89,14 +99,27 @@ def checkpoint(scope=None):
             def check_allowed(self):
                 ...
 
+            @checkpoint(priority=1, methods='GET')
+            def check_high_priority_get(self):
+                ...
+
     """
 
+    if methods is not None and not isinstance(methods, tuple):
+        methods = methods,
+
     if hasattr(scope, '__call__'):
-        setattr(scope, '__hypr_cp', None)
+
+        setattr(scope, '__hypr_cp', ((None,), priority, methods))
         return scope
+
     else:
+
+        if not isinstance(scope, tuple):
+            scope = scope,
+
         def decorator(fn):
-            setattr(fn, '__hypr_cp', scope)
+            setattr(fn, '__hypr_cp', (scope, priority, methods))
             return fn
 
         return decorator
@@ -191,7 +214,7 @@ class ProviderType(type):
         cls.name = name
 
         methods = set(cls.methods or [])
-        sec_scope = {}
+        sec_scope = defaultdict(set)
 
         fltrs = {}
 
@@ -210,16 +233,17 @@ class ProviderType(type):
                     fltrs[scope].add((name,) + hypr_fltr[1:])
 
             # search security checkpoint methods
-            hypr_sec = getattr(func, '__hypr_cp', ())
-            if not isinstance(hypr_sec, tuple):
-                hypr_sec = hypr_sec,
-            for scope in hypr_sec:
-                if scope not in sec_scope:
-                    sec_scope[scope] = set()
-                sec_scope[scope].add(name)
+            scopes, priority, verbs = getattr(func, '__hypr_cp', ((), 0, None))
+            for scope in scopes:
+                sec_scope[scope].add((priority, name, verbs))
+
+        for k, v in sec_scope.items():
+            tmp = list(v)
+            tmp.sort()
+            sec_scope[k] = tuple((f, v) for _, f, v in tmp)
 
         cls.methods = tuple(methods)
-        cls._sec_scope = sec_scope
+        cls._sec_scope = dict(sec_scope)
         cls._fltrs = fltrs
         cls._subrules = {}
         return cls
@@ -413,8 +437,9 @@ class Provider(metaclass=ProviderType):
 
         # Apply all the sec checkpoints associated with the specified scope.
 
-        for name in self._sec_scope.get(scope, ()):
-            yield from self._call_meth(name)
+        for name, verbs in self._sec_scope.get(scope, ()):
+            if verbs is None or request.method in verbs:
+                yield from self._call_meth(name)
 
     @asyncio.coroutine
     def _apply_filters(self, scope):
