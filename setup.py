@@ -14,12 +14,13 @@ if sys.version_info < (3, 4):
     raise RuntimeError("hypr requires Python 3.4+")
 
 
-import os, re
+import re
+from pathlib import Path
 from setuptools import setup, find_packages
 
 # read the version number from package
-f = open(os.path.join(os.path.dirname(__file__), 'hypr', '__init__.py'))
-v, = re.search('.*__version__ = \'(.*)\'.*', f.read(), re.MULTILINE).groups()
+with (Path(__file__).resolve().parent / 'hypr/__init__.py').open() as f:
+    v, = re.search(".*__version__ = '(.*)'.*", f.read(), re.MULTILINE).groups()
 
 
 setup(
