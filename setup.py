@@ -8,6 +8,12 @@ A RESTful microservice framework with the simplicity and security in mind.
 """
 
 
+import sys
+
+if sys.version_info < (3, 4):
+    raise RuntimeError("hypr requires Python 3.4+")
+
+
 import os, re
 from setuptools import setup, find_packages
 
